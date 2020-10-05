@@ -8,7 +8,7 @@ This project is built to help extracting clinical scores from the .xlsx files in
 
 ### Built With
 
-* Python 3.7
+* Python 3.7.8
 
 
 <!-- GETTING STARTED -->
