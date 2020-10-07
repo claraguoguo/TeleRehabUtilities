@@ -1,8 +1,6 @@
 .DS_Store
 .idea
-<<<<<<< HEAD
-.python-version
-=======
 .python-version
 */dataset/*
->>>>>>> a15eb8d... Added my current changes
+*/output/*
+
