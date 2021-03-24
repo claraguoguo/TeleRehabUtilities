@@ -18,6 +18,11 @@ def getClinicalScores(rootdir):
 
 
     result = pd.concat(scoreDataList)
+    # remove duplicated rows
+    result = result.drop_duplicates()
+    # set Subject ID as index
+    result = result.set_index('Subject ID')
+
     scoreSum = np.cumsum(result,axis=0)[1:]
     # print(np.cumsum(result,axis=0)[-1:])
     scoreMean = result.mean()
@@ -27,5 +32,5 @@ def getClinicalScores(rootdir):
 
 
 if __name__ == '__main__':
-    directoryPath = '/Users/Clara/Desktop/KiMoRe-Full'
+    directoryPath = '/Users/Clara/Desktop/KiMoRe/Full'
     getClinicalScores(directoryPath)
