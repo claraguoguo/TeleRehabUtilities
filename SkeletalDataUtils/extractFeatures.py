@@ -199,7 +199,7 @@ def main():
         # plot_body_joints(data, peaks_index, features, video_name)
 
         # Save the features
-        np.savetxt(os.path.join(FEATURES_FILE_PATH, video_name), features, delimiter=',', fmt='%1.3f')
+        np.savetxt(os.path.join(FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
 
 if __name__ == '__main__':
     main()
