@@ -1,16 +1,21 @@
 import glob
-from scipy.signal import find_peaks
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import pandas as pd
+import seaborn as sns
 
 # The difference between the y-coordinates of left-hand and right-hand
 #  should not exceed HANDS_DIFF_THRESHOLD
+
+CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torse_tilted_angle', 'hand_tilted_angle']
 HANDS_DIFF_THRESHOLD = 50
 NUM_REPETITION = 5
 FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_txt_files_all_joints'
-FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features'
-FEATURES_PLOTS_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features_plots'
+FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_4_features_elbowAngles_handShoulderRatio_tiltedAngle'
+FEATURES_PLOTS_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_feature_plots'
+ALL_TIMESTAMPS_FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features_all_timestamps'
+
 
 
 def plot_body_joints(data, peaks_index, features, video_name):
@@ -32,10 +37,12 @@ def plot_body_joints(data, peaks_index, features, video_name):
         non_zero_xs = xs[non_zero_indices]
         non_zero_ys = ys[non_zero_indices]
 
+        # Do not show (0,0) points
         ax.plot(non_zero_xs, non_zero_ys, 'bo')
-        # ax.plot(xs, ys, 'bo')
-
         for ind in non_zero_indices:
+
+        # Show (0,0) points
+        # ax.plot([0]+xs, [0]+ys, 'bo')
         # for ind in range(25):
             label = "{}".format(ind)
 
@@ -45,9 +52,10 @@ def plot_body_joints(data, peaks_index, features, video_name):
                          xytext=(0, 10),  # distance from text to points (x,y)
                          ha='center')  # horizontal alignment can be left, right or center
         ax.invert_yaxis()
-        ax.set_title('timestamp: {0} \nleft_elbow_angle: {1:.1f}   right_elbow_angle: {2:.1f} '
-                     '\nhand_distance: {3:.1f}   torso_area: {4:.1f}'.\
-                     format(index, feature[0], feature[1], feature[2], feature[3]))
+        ax.set_title('timestamp: {0} \n {5}: {1:.1f}   {6}}: {2:.1f} '
+                     '\n{7}: {3:.1f}   {8}: {4:.1f}'.\
+                     format(index, feature[0], feature[1], feature[2], feature[3],
+                            CURR_FEATURES[0], CURR_FEATURES[1], CURR_FEATURES[2], CURR_FEATURES[3]))
         # ax.show(block=False),
         # ax.pause(1)
         # ax.close()
@@ -106,16 +114,16 @@ def angle_between(v1, v2):
 def compute_poly_area(x, y):
     return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
-def compute_features(peaks_index, data):
+def compute_features(timestamps, data):
     '''
 
     :param peaks_index: 4 timestamps when the hands are raised to the highest positions
     :param data: 25 body joints extracted from "GOOD" frames, which have the 10 upper body joints
-    :return: [left_elbow_angle, right_elbow_angle, hand_distance, torso_area]
+    :return: features in the order of CURR_FEATURES
     '''
-    features = np.empty(shape=(0,4))
-    for index in peaks_index:
-        frame = data[index, :]
+    features = np.empty(shape=(0, len(CURR_FEATURES)))
+    for timestamp in timestamps:
+        frame = data[timestamp, :]
         ''' 
         Left arm:
         pt_2: left shoulder
@@ -142,6 +150,14 @@ def compute_features(peaks_index, data):
         pt_7 = np.array([frame[7 * 2], frame[7 * 2 + 1]])
         pt_12 = np.array([frame[12 * 2], frame[12 * 2 + 1]])
 
+        '''
+        Torso:
+        pt_1: neck
+        pt_8: mid-hip 
+        '''
+        pt_1 = np.array([frame[1 * 2], frame[1 * 2 + 1]])
+        pt_8 = np.array([frame[8 * 2], frame[8 * 2 + 1]])
+
         # vec_32: vector from pt_3 to pt_2
         vec_32 = pt_2 - pt_3
         vec_34 = pt_4 - pt_3
@@ -151,23 +167,50 @@ def compute_features(peaks_index, data):
         vec_67 = pt_7 - pt_6
         right_elbow_angle = angle_between(vec_65, vec_67)
 
-        # Compute the distance between left hand and right hand
+        # Compute the distance between left hand and right hand (pt7 and pt4)
         vec_47 = pt_7 - pt_4
         hand_distance = np.linalg.norm(vec_47)
+
+        # Compute the shoulder distance between pt5 and pt2
+        vec25 = pt_5 - pt_2
+        shoulder_distance = np.linalg.norm(vec25)
+
+        hand_shoulder_ratio = hand_distance/shoulder_distance
+
+        # Compute midterm between hands
+        hands_midpoint = (pt_4 + pt_7)/2
+
+        # Vertical vector between pt_1 and pt_8
+        vec_81 = pt_1 - pt_8
+        vec_8_hand_mid = hands_midpoint - pt_8
+        torse_tilted_angle = angle_between(vec_81, vec_8_hand_mid)
+
+        # Compute the tilted angle between two hands
+        horizontal_vec = np.array([pt_7[0], pt_4[1]]) - pt_4
+        hand_tilted_angle = angle_between(horizontal_vec, vec_47)
 
         # Compute the torso area which the area enclosed by body points: 2, 5, 9, 12
         torso = np.array([pt_2, pt_5, pt_12, pt_9])
         torso_area = compute_poly_area(torso[:, 0], torso[:, 1])
 
-        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_distance, torso_area])
+        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torse_tilted_angle, hand_tilted_angle])
+
+        print_string = f'timestamp: {timestamp}'
+        for i, feat in enumerate(CURR_FEATURES):
+            print_string += ' {0}:{1:.1f}'.format(feat, curr_features[i])
+
+        print(print_string)
+        # print('timestamp: {0} {5}: {1:.1f}   {6}: {2:.1f} '
+        #       '{7}: {3:.1f}   {8}: {4:.1f}'. \
+        #       format(timestamp, curr_features[0], curr_features[1], curr_features[2], curr_features[3],
+        #              CURR_FEATURES[0], CURR_FEATURES[1], CURR_FEATURES[2], CURR_FEATURES[3]))
 
         features = np.vstack((features, curr_features))
+
     return features
 
-def main():
+def get_peak_features(should_draw_plots, should_compute_features, df):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
-        # filepath = FILE_PATH + "/GPP_Stroke_S_ID6_Es1_rgb_Blur_rgb040716_112230.txt"
-
         # video has shape [frames x num_joints]
         data = np.loadtxt(filepath, delimiter=',')
 
@@ -189,17 +232,88 @@ def main():
         diff_left_right = abs(left_hand_y - right_hand_y)
 
         peaks_index = get_peaks_index(sum_left_right, NUM_REPETITION)  # Find 5 peaks
-        print(peaks_index)
 
         # Features = [num_peaks x num_features]
-        # 1 feature = [left_elbow_angle, right_elbow_angle, hand_distance, torso_area]
         features = compute_features(peaks_index, data)
 
         video_name = os.path.basename(filepath).split('.')[0]
-        # plot_body_joints(data, peaks_index, features, video_name)
+        if video_name[-1] == "_":
+            # Naming is inconsistent in KIMORE, some videos has an extra underscore. The extra underscore needs to be removed
+            # i.e. 'CG_Expert_E_ID9_Es1_rgb_Blur_rgb271114_123334_'
+            video_name = video_name[:-1]
+
+        if should_draw_plots:
+            plot_body_joints(data, peaks_index, features, video_name)
 
         # Save the features
-        np.savetxt(os.path.join(FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
+        if should_compute_features:
+            np.savetxt(os.path.join(FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
+
+        # Add features to dataframe
+        subject_id = '_'.join(video_name.split('_')[2:4])
+        for i, feat in enumerate(CURR_FEATURES):
+            df._set_value(subject_id, feat, np.mean(features[:,i]))
+
+
+def get_features_at_all_timestamps():
+    for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
+        # video has shape [frames x num_joints]
+        data = np.loadtxt(filepath, delimiter=',')
+        num_lines = sum(1 for line in open(filepath))
+        features = compute_features(np.arange(num_lines), data)
+
+        video_name = os.path.basename(filepath).split('.')[0]
+        if video_name[-1] == "_":
+            # Naming is inconsistent in KIMORE, some videos has an extra underscore. The extra underscore needs to be removed
+            # i.e. 'CG_Expert_E_ID9_Es1_rgb_Blur_rgb271114_123334_'
+            video_name = video_name[:-1]
+
+        print(video_name)
+        # Save the features
+        np.savetxt(os.path.join(ALL_TIMESTAMPS_FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
+
+
+def plot_heatmap(df, corr_type):
+    # Using Pearson Correlation
+    plt.figure(figsize=(11, 11))
+    cor = df.corr(method=corr_type)
+    sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+    plt.title(f"{corr_type} correlation matrix", fontsize=20)
+    plt.xticks(rotation=45)
+    plt.yticks(rotation=45)
+    plt.savefig('{0}_corr_{1}_features.png'.format(corr_type, len(CURR_FEATURES)))
+    plt.close()
+
+def main():
+        # Load score_df
+        '''
+        To access data using index:
+                score_df.loc['NE_ID16', :]
+        '''
+        all_score_df = pd.read_pickle('Es1_RGB_dF')
+
+        ex1_df = pd.DataFrame()
+        ex1_df['score'] = all_score_df['clinical TS Ex#1']
+        # Add the feature columns to dataframe
+        ex1_df = pd.concat([ex1_df, pd.DataFrame(columns=CURR_FEATURES)])
+
+        # Get feature from selected timestamps --> peaks
+        # ex1_df will be updated
+        should_draw_plots = False
+        should_compute_features = False
+        get_peak_features(should_draw_plots, should_compute_features, ex1_df)
+
+        # Convert all elements to float
+        ex1_df = ex1_df.astype(float)
+
+        # Get features from all timestamps
+        # get_features_at_all_timestamps()
+
+        # Plot heat map for features
+        plot_heatmap(ex1_df, 'pearson')
+        plot_heatmap(ex1_df, 'spearman')
+
+
 
 if __name__ == '__main__':
     main()

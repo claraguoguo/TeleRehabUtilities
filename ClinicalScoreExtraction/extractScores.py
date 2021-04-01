@@ -23,7 +23,7 @@ def getClinicalScores(rootdir):
     # set Subject ID as index
     result = result.set_index('Subject ID')
 
-    scoreSum = np.cumsum(result,axis=0)[1:]
+    scoreSum = np.cumsum(result, axis=0)[1:]
     # print(np.cumsum(result,axis=0)[-1:])
     scoreMean = result.mean()
     print(scoreMean)
