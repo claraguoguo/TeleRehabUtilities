@@ -4,3 +4,6 @@
 */dataset/*
 */output/*
 
+*.png
+*.txt
+SkeletalDataUtils/Es1_RGB_df
