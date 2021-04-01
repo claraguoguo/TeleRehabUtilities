@@ -11,14 +11,18 @@ import seaborn as sns
 CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torse_tilted_angle', 'hand_tilted_angle']
 HANDS_DIFF_THRESHOLD = 50
 NUM_REPETITION = 5
+
 FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_txt_files_all_joints'
-FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_4_features_elbowAngles_handShoulderRatio_tiltedAngle'
-FEATURES_PLOTS_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_feature_plots'
-ALL_TIMESTAMPS_FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features_all_timestamps'
+OUTPUT_ROOT = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/'
+
+#
+# FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_4_features_elbowAngles_handShoulderRatio_tiltedAngle'
+# FEATURES_PLOTS_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_feature_plots'
+# ALL_TIMESTAMPS_FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features_all_timestamps'
 
 
 
-def plot_body_joints(data, peaks_index, features, video_name):
+def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
     fig = plt.figure()
 
     for index, counter in zip(peaks_index, range(NUM_REPETITION)):
@@ -52,10 +56,12 @@ def plot_body_joints(data, peaks_index, features, video_name):
                          xytext=(0, 10),  # distance from text to points (x,y)
                          ha='center')  # horizontal alignment can be left, right or center
         ax.invert_yaxis()
-        ax.set_title('timestamp: {0} \n {5}: {1:.1f}   {6}}: {2:.1f} '
-                     '\n{7}: {3:.1f}   {8}: {4:.1f}'.\
-                     format(index, feature[0], feature[1], feature[2], feature[3],
-                            CURR_FEATURES[0], CURR_FEATURES[1], CURR_FEATURES[2], CURR_FEATURES[3]))
+
+        title = f'timestamp: {index}'
+        for i, feat in enumerate(CURR_FEATURES):
+            title += ' {0}:{1:.1f}'.format(feat, feature[i])
+
+        ax.set_title(title)
         # ax.show(block=False),
         # ax.pause(1)
         # ax.close()
@@ -64,7 +70,7 @@ def plot_body_joints(data, peaks_index, features, video_name):
     plt.suptitle(video_name)
     # plt.show(block=False)
     # plt.pause(1)
-    plt.savefig(os.path.join(FEATURES_PLOTS_PATH, video_name + '.png'))
+    plt.savefig(os.path.join(feature_plots_output, video_name + '.png'))
     plt.close()
 
 
@@ -209,7 +215,7 @@ def compute_features(timestamps, data):
 
     return features
 
-def get_peak_features(should_draw_plots, should_compute_features, df):
+def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_output, feature_plots_output):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
         # video has shape [frames x num_joints]
         data = np.loadtxt(filepath, delimiter=',')
@@ -243,11 +249,11 @@ def get_peak_features(should_draw_plots, should_compute_features, df):
             video_name = video_name[:-1]
 
         if should_draw_plots:
-            plot_body_joints(data, peaks_index, features, video_name)
+            plot_body_joints(data, peaks_index, features, video_name, feature_plots_output)
 
         # Save the features
-        if should_compute_features:
-            np.savetxt(os.path.join(FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
+        if should_write_features:
+            np.savetxt(os.path.join(feature_txt_output, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
 
         # Add features to dataframe
         subject_id = '_'.join(video_name.split('_')[2:4])
@@ -255,7 +261,7 @@ def get_peak_features(should_draw_plots, should_compute_features, df):
             df._set_value(subject_id, feat, np.mean(features[:,i]))
 
 
-def get_features_at_all_timestamps():
+def get_features_at_all_timestamps(all_timestamps_features_output):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
         # video has shape [frames x num_joints]
         data = np.loadtxt(filepath, delimiter=',')
@@ -270,7 +276,7 @@ def get_features_at_all_timestamps():
 
         print(video_name)
         # Save the features
-        np.savetxt(os.path.join(ALL_TIMESTAMPS_FEATURES_FILE_PATH, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
+        np.savetxt(os.path.join(all_timestamps_features_output, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
 
 
 def plot_heatmap(df, corr_type):
@@ -285,35 +291,68 @@ def plot_heatmap(df, corr_type):
     plt.close()
 
 def main():
-        # Load score_df
-        '''
-        To access data using index:
-                score_df.loc['NE_ID16', :]
-        '''
-        all_score_df = pd.read_pickle('Es1_RGB_dF')
+    should_draw_plots = True
+    should_write_features = True
 
-        ex1_df = pd.DataFrame()
-        ex1_df['score'] = all_score_df['clinical TS Ex#1']
-        # Add the feature columns to dataframe
-        ex1_df = pd.concat([ex1_df, pd.DataFrame(columns=CURR_FEATURES)])
-
-        # Get feature from selected timestamps --> peaks
-        # ex1_df will be updated
-        should_draw_plots = False
-        should_compute_features = False
-        get_peak_features(should_draw_plots, should_compute_features, ex1_df)
-
-        # Convert all elements to float
-        ex1_df = ex1_df.astype(float)
-
-        # Get features from all timestamps
-        # get_features_at_all_timestamps()
-
-        # Plot heat map for features
-        plot_heatmap(ex1_df, 'pearson')
-        plot_heatmap(ex1_df, 'spearman')
+    output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features')
+    try:
+        os.mkdir(output_folder)
+    except OSError:
+        print("Creation of the directory %s failed!" % output_folder)
 
 
+    # Load score_df
+    '''
+    To access data using index:
+            score_df.loc['NE_ID16', :]
+    '''
+    all_score_df = pd.read_pickle('Es1_RGB_df')
+
+    ex1_df = pd.DataFrame()
+    ex1_df['score'] = all_score_df['clinical TS Ex#1']
+    # Add the feature columns to dataframe
+    ex1_df = pd.concat([ex1_df, pd.DataFrame(columns=CURR_FEATURES)])
+
+    # Get feature from selected timestamps --> peaks
+    # ex1_df will be updated
+
+    if should_write_features:
+        feature_txt_output = os.path.join(output_folder, 'features')
+        try:
+            os.mkdir(feature_txt_output)
+        except OSError:
+            print("Creation of the directory %s failed!" % feature_txt_output)
+            assert True
+
+    if should_draw_plots:
+        feature_plots_output = os.path.join(output_folder, 'feature_plots')
+        try:
+            os.mkdir(feature_plots_output)
+        except OSError:
+            print("Creation of the directory %s failed!" % feature_plots_output)
+            assert True
+
+    get_peak_features(should_draw_plots, should_write_features, ex1_df, feature_txt_output, feature_plots_output)
+
+    # Convert all elements to float
+    ex1_df = ex1_df.astype(float)
+
+    # # Get features from all timestamps
+    # all_timestamps_features_output = os.path.join(output_folder, 'feature_all_timestamps')
+    # try:
+    #     os.mkdir(all_timestamps_features_output)
+    # except OSError:
+    #     print("Creation of the directory %s failed!" % all_timestamps_features_output)
+    # get_features_at_all_timestamps(all_timestamps_features_output)
+
+    # Plot heat map for features
+    plot_heatmap(ex1_df, 'pearson')
+    plot_heatmap(ex1_df, 'spearman')
+
+    # Create a txt file to record feature info
+    with open(os.path.join(output_folder ,'features_into.txt'), 'w') as f:
+        for item in CURR_FEATURES:
+            f.write("%s\n" % item)
 
 if __name__ == '__main__':
     main()
