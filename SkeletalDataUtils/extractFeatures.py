@@ -8,7 +8,7 @@ import seaborn as sns
 # The difference between the y-coordinates of left-hand and right-hand
 #  should not exceed HANDS_DIFF_THRESHOLD
 
-CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torse_tilted_angle', 'hand_tilted_angle']
+CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle', 'hand_tilted_angle', 'elbow_angles_diff']
 HANDS_DIFF_THRESHOLD = 50
 NUM_REPETITION = 5
 
@@ -120,7 +120,7 @@ def angle_between(v1, v2):
 def compute_poly_area(x, y):
     return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
-def compute_features(timestamps, data):
+def compute_features(timestamps, data, score):
     '''
 
     :param peaks_index: 4 timestamps when the hands are raised to the highest positions
@@ -199,17 +199,15 @@ def compute_features(timestamps, data):
         torso = np.array([pt_2, pt_5, pt_12, pt_9])
         torso_area = compute_poly_area(torso[:, 0], torso[:, 1])
 
-        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torse_tilted_angle, hand_tilted_angle])
+        # Compute the difference of elbow angles
+        elbow_angles_diff = abs(left_elbow_angle - right_elbow_angle)
+        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torse_tilted_angle, hand_tilted_angle, elbow_angles_diff])
 
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
             print_string += ' {0}:{1:.1f}'.format(feat, curr_features[i])
-
+        print_string += ' score:{:.2f}'.format(score)
         print(print_string)
-        # print('timestamp: {0} {5}: {1:.1f}   {6}: {2:.1f} '
-        #       '{7}: {3:.1f}   {8}: {4:.1f}'. \
-        #       format(timestamp, curr_features[0], curr_features[1], curr_features[2], curr_features[3],
-        #              CURR_FEATURES[0], CURR_FEATURES[1], CURR_FEATURES[2], CURR_FEATURES[3]))
 
         features = np.vstack((features, curr_features))
 
@@ -220,6 +218,8 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         # video has shape [frames x num_joints]
         data = np.loadtxt(filepath, delimiter=',')
 
+        video_name = os.path.basename(filepath).split('.')[0]
+        subject_id = '_'.join(video_name.split('_')[2:4])
         # show the point plot
         # show_plots(data[0])
 
@@ -240,9 +240,10 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         peaks_index = get_peaks_index(sum_left_right, NUM_REPETITION)  # Find 5 peaks
 
         # Features = [num_peaks x num_features]
-        features = compute_features(peaks_index, data)
+        score = df.loc[subject_id]['score']
+        print(subject_id)
+        features = compute_features(peaks_index, data, score)
 
-        video_name = os.path.basename(filepath).split('.')[0]
         if video_name[-1] == "_":
             # Naming is inconsistent in KIMORE, some videos has an extra underscore. The extra underscore needs to be removed
             # i.e. 'CG_Expert_E_ID9_Es1_rgb_Blur_rgb271114_123334_'
@@ -256,7 +257,7 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
             np.savetxt(os.path.join(feature_txt_output, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
 
         # Add features to dataframe
-        subject_id = '_'.join(video_name.split('_')[2:4])
+        # TODO: df record the feature values computed by taking the average of 5 repetitions. NEED TO BE FIXED!
         for i, feat in enumerate(CURR_FEATURES):
             df._set_value(subject_id, feat, np.mean(features[:,i]))
 
@@ -279,7 +280,7 @@ def get_features_at_all_timestamps(all_timestamps_features_output):
         np.savetxt(os.path.join(all_timestamps_features_output, video_name + '.txt'), features, delimiter=',', fmt='%1.3f')
 
 
-def plot_heatmap(df, corr_type):
+def plot_heatmap(df, corr_type, output_folder):
     # Using Pearson Correlation
     plt.figure(figsize=(11, 11))
     cor = df.corr(method=corr_type)
@@ -287,12 +288,12 @@ def plot_heatmap(df, corr_type):
     plt.title(f"{corr_type} correlation matrix", fontsize=20)
     plt.xticks(rotation=45)
     plt.yticks(rotation=45)
-    plt.savefig('{0}_corr_{1}_features.png'.format(corr_type, len(CURR_FEATURES)))
+    plt.savefig(os.path.join(output_folder, '{0}_corr_{1}_features.png'.format(corr_type, len(CURR_FEATURES))))
     plt.close()
 
 def main():
-    should_draw_plots = True
-    should_write_features = True
+    should_draw_plots = False
+    should_write_features = False
 
     output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features')
     try:
@@ -316,6 +317,7 @@ def main():
     # Get feature from selected timestamps --> peaks
     # ex1_df will be updated
 
+    feature_txt_output = feature_plots_output = ''
     if should_write_features:
         feature_txt_output = os.path.join(output_folder, 'features')
         try:
@@ -337,6 +339,10 @@ def main():
     # Convert all elements to float
     ex1_df = ex1_df.astype(float)
 
+    # Save the feature df
+    ex1_df.to_csv(os.path.join(output_folder, 'Ex1_skeletal_features.csv'))
+    ex1_df.to_pickle(os.path.join(output_folder, 'Ex1_skeletal_features.pkl'))
+
     # # Get features from all timestamps
     # all_timestamps_features_output = os.path.join(output_folder, 'feature_all_timestamps')
     # try:
@@ -346,11 +352,11 @@ def main():
     # get_features_at_all_timestamps(all_timestamps_features_output)
 
     # Plot heat map for features
-    plot_heatmap(ex1_df, 'pearson')
-    plot_heatmap(ex1_df, 'spearman')
+    plot_heatmap(ex1_df, 'pearson', output_folder)
+    plot_heatmap(ex1_df, 'spearman', output_folder)
 
     # Create a txt file to record feature info
-    with open(os.path.join(output_folder ,'features_into.txt'), 'w') as f:
+    with open(os.path.join(output_folder, 'features_into.txt'), 'w') as f:
         for item in CURR_FEATURES:
             f.write("%s\n" % item)
 
