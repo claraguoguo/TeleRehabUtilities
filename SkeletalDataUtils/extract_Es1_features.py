@@ -15,12 +15,6 @@ NUM_REPETITION = 5
 FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_txt_files_all_joints'
 OUTPUT_ROOT = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/'
 
-#
-# FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_4_features_elbowAngles_handShoulderRatio_tiltedAngle'
-# FEATURES_PLOTS_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_feature_plots'
-# ALL_TIMESTAMPS_FEATURES_FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_features_all_timestamps'
-
-
 
 def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
     fig = plt.figure()
@@ -189,7 +183,7 @@ def compute_features(timestamps, data, score):
         # Vertical vector between pt_1 and pt_8
         vec_81 = pt_1 - pt_8
         vec_8_hand_mid = hands_midpoint - pt_8
-        torse_tilted_angle = angle_between(vec_81, vec_8_hand_mid)
+        torso_tilted_angle = angle_between(vec_81, vec_8_hand_mid)
 
         # Compute the tilted angle between two hands
         horizontal_vec = np.array([pt_7[0], pt_4[1]]) - pt_4
@@ -201,7 +195,7 @@ def compute_features(timestamps, data, score):
 
         # Compute the difference of elbow angles
         elbow_angles_diff = abs(left_elbow_angle - right_elbow_angle)
-        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torse_tilted_angle, hand_tilted_angle, elbow_angles_diff])
+        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torso_tilted_angle, hand_tilted_angle, elbow_angles_diff])
 
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
@@ -291,7 +285,7 @@ def plot_heatmap(df, corr_type, output_folder):
     plt.savefig(os.path.join(output_folder, '{0}_corr_{1}_features.png'.format(corr_type, len(CURR_FEATURES))))
     plt.close()
 
-def main():
+def get_Es1_features():
     should_draw_plots = False
     should_write_features = False
 
@@ -356,9 +350,12 @@ def main():
     plot_heatmap(ex1_df, 'spearman', output_folder)
 
     # Create a txt file to record feature info
-    with open(os.path.join(output_folder, 'features_into.txt'), 'w') as f:
+    with open(os.path.join(output_folder, 'features_info.txt'), 'w') as f:
         for item in CURR_FEATURES:
             f.write("%s\n" % item)
+
+def main():
+    get_Es1_features()
 
 if __name__ == '__main__':
     main()

@@ -4,9 +4,16 @@ import numpy as np
 import os
 import json
 
-FILE_ROOT = "/Users/Clara_1/Google Drive/KiMoRe_skeletal/"
-OUTPUT_FILE = "/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_txt_files_all_joints/"
-UPPER_BODY_INDEX = np.array([1,2,3,4,5,6,7,8,9,12])
+EXERCISE_TYPE = 'Es2'
+FILE_ROOT = f"/Users/Clara_1/Google Drive/KiMoRe_skeletal_{EXERCISE_TYPE}/"
+OUTPUT_FOLDER = f"/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints/"
+UPPER_BODY_INDEX = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 12])
+LOWER_BODY_INDEX = np.array([10, 11, 13, 14, 19, 20, 21, 22, 23, 24])
+LEG_INDEX = np.array([10, 13])
+
+# VALID_JOINTS_INDEX = np.append(UPPER_BODY_INDEX)
+VALID_JOINTS_INDEX = UPPER_BODY_INDEX
+
 TOTAL_BODY_JOINTS = 25
 
 def get_valid_points(joints):
@@ -15,7 +22,7 @@ def get_valid_points(joints):
     :return: A list of valid body joints in (x, y)
     '''
     output = []
-    for index in UPPER_BODY_INDEX:
+    for index in VALID_JOINTS_INDEX:
         x = joints[index*3]
         y = joints[index*3 + 1]
         if (x == 0 or y == 9):
@@ -37,22 +44,35 @@ def get_all_points(joints):
     return output
 
 def is_good_frame(joints):
-    missing_valid_points = [i for i in UPPER_BODY_INDEX if joints[i*3] == 0]
+    missing_valid_points = [i for i in VALID_JOINTS_INDEX if joints[i*3] == 0]
 
-    # Return True if none of the key points in UPPER_BODY_INDEX is missing
+    # missing_upper_body = [i for i in UPPER_BODY_INDEX if joints[i*3] == 0]
+    # missing_lower = [i for i in LOWER_BODY_INDEX if joints[i*3] == 0]
+    # if len(missing_upper_body) == 0 and len(missing_lower) > 3:
+    #     print("missing_lower:{} {}".format(len(missing_lower), missing_lower))
+    #     # print(len(missing_lower))
+
+    # Return True if none of the key points in VALID_JOINTS_INDEX is missing
     return len(missing_valid_points) == 0
 
 
 def process_JSON():
+    try:
+        os.mkdir(OUTPUT_FOLDER)
+    except OSError:
+        print("Creation of the directory %s failed!" % OUTPUT_FOLDER)
+        raise
     for rootdir, dirs, files in os.walk(FILE_ROOT):
         for subdir in dirs:
             video_path = os.path.join(rootdir, subdir)
 
-            all_valid_joints = np.empty((0, len(UPPER_BODY_INDEX) * 2))
+            all_valid_joints = np.empty((0, len(VALID_JOINTS_INDEX) * 2))
             all_joints = np.empty((0, TOTAL_BODY_JOINTS * 2))
 
             total_frames = 0
+            valid_frames = 0
             for filepath in glob.glob(video_path + '/*.json', recursive=True):
+                total_frames += 1
                 data = json.load(open(filepath))
                 # body_joints is a list of size 25
                 if (len(data['people']) != 0):
@@ -63,12 +83,13 @@ def process_JSON():
 
                         # all_joints has all 25 joints, this includes zero values (missing points)
                         all_joints = np.vstack((all_joints, np.asarray(get_all_points(body_joints))))
-                        total_frames += 1
+                        valid_frames += 1
 
             # Save joints extracted from valid frames into txt file
-            output_txt_file = os.path.join(OUTPUT_FILE, subdir + ".txt")
+            output_txt_file = os.path.join(OUTPUT_FOLDER, subdir + ".txt")
             np.savetxt(output_txt_file, all_joints, delimiter=",", fmt='%1.3f')
-            print("video: {}  Total frames:{} ".format(subdir, total_frames))
+            print("video: {}  Total frames:{}  Valid frames:{}  Bad frames: {} ".format(
+                subdir, total_frames, valid_frames, total_frames-valid_frames))
 
 
 
