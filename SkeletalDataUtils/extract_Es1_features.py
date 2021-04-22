@@ -12,12 +12,12 @@ CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'to
 HANDS_DIFF_THRESHOLD = 50
 NUM_REPETITION = 5
 
-FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/KiMoRe_skeletal_txt_files_all_joints'
-OUTPUT_ROOT = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/'
+FILE_PATH = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/Es1/KiMoRe_skeletal_txt_files_all_joints'
+OUTPUT_ROOT = '/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/Es1'
 
 
 def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
-    fig = plt.figure()
+    fig = plt.figure(figsize=(12, 12))
 
     for index, counter in zip(peaks_index, range(NUM_REPETITION)):
         ax = fig.add_subplot(2, 3, counter + 1)
@@ -52,16 +52,20 @@ def plot_body_joints(data, peaks_index, features, video_name, feature_plots_outp
         ax.invert_yaxis()
 
         title = f'timestamp: {index}'
-        for i, feat in enumerate(CURR_FEATURES):
-            title += ' {0}:{1:.1f}'.format(feat, feature[i])
+        # for i, feat in enumerate(CURR_FEATURES):
+        #     title += ' {0}:{1:.1f}'.format(feat, feature[i])
+        #     if i == 2:
+        #         title += '\n'
 
-        ax.set_title(title)
+        ax.set_title(title, fontsize = 15)
         # ax.show(block=False),
         # ax.pause(1)
         # ax.close()
 
     plt.tight_layout()
-    plt.suptitle(video_name)
+    fig.subplots_adjust(top=0.9)
+    plt.suptitle(video_name, fontsize=15)
+
     # plt.show(block=False)
     # plt.pause(1)
     plt.savefig(os.path.join(feature_plots_output, video_name + '.png'))
@@ -210,6 +214,9 @@ def compute_features(timestamps, data, score):
 def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_output, feature_plots_output):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
         # video has shape [frames x num_joints]
+        # isValid = 'E_ID12' in filepath or 'P_ID11' in filepath
+        # if not isValid: continue
+
         data = np.loadtxt(filepath, delimiter=',')
 
         video_name = os.path.basename(filepath).split('.')[0]
@@ -227,10 +234,20 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
 
         # Subjects were asked to repeat each exercise consecutively 5 times
         # Find 5 local min for y-coordinates (local min == hand rise above head)
-
         sum_left_right = left_hand_y + right_hand_y
         diff_left_right = abs(left_hand_y - right_hand_y)
 
+        d = {'left_x': left_hand_x, 'left_y': left_hand_y, 'right_x': right_hand_x, 'right_y': right_hand_y,
+             'y_sum': sum_left_right, 'y_diff': diff_left_right}
+
+        data_df = pd.DataFrame(data=d)
+
+        data_df['norm'] = pow((pow(data_df['left_x'] - data_df['right_x'], 2) +
+                               pow(data_df['left_y'] - data_df['right_y'], 2))
+                              , 0.5)
+
+        lowest_arm_position = data_df.loc[[data_df.loc[data_df['norm'] > 10, 'y_sum'].idxmin()]].index.values.tolist()
+        # arm_length = d
         peaks_index = get_peaks_index(sum_left_right, NUM_REPETITION)  # Find 5 peaks
 
         # Features = [num_peaks x num_features]
@@ -259,6 +276,7 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
 def get_features_at_all_timestamps(all_timestamps_features_output):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
         # video has shape [frames x num_joints]
+
         data = np.loadtxt(filepath, delimiter=',')
         num_lines = sum(1 for line in open(filepath))
         features = compute_features(np.arange(num_lines), data)
@@ -278,7 +296,7 @@ def plot_heatmap(df, corr_type, output_folder):
     # Using Pearson Correlation
     plt.figure(figsize=(11, 11))
     cor = df.corr(method=corr_type)
-    sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+    sns.heatmap(cor, annot=True, cmap='coolwarm')
     plt.title(f"{corr_type} correlation matrix", fontsize=20)
     plt.xticks(rotation=45)
     plt.yticks(rotation=45)
@@ -318,7 +336,6 @@ def get_Es1_features():
             os.mkdir(feature_txt_output)
         except OSError:
             print("Creation of the directory %s failed!" % feature_txt_output)
-            assert True
 
     if should_draw_plots:
         feature_plots_output = os.path.join(output_folder, 'feature_plots')
@@ -326,7 +343,6 @@ def get_Es1_features():
             os.mkdir(feature_plots_output)
         except OSError:
             print("Creation of the directory %s failed!" % feature_plots_output)
-            assert True
 
     get_peak_features(should_draw_plots, should_write_features, ex1_df, feature_txt_output, feature_plots_output)
 

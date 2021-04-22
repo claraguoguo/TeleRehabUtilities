@@ -10,14 +10,14 @@ plt.ioff()
 
 CURR_FEATURES = ['']
 NUM_REPETITION = 5
-EXERCISE_INDEX = 2
+EXERCISE_INDEX = 3
 EXERCISE_TYPE = f'Es{EXERCISE_INDEX}'
 
 FILE_PATH = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints'
 OUTPUT_ROOT = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}'
 
 CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle',
-                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff']
+                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff', 'left_arm_torso_angle', 'right_arm_torso_angle']
 NUM_PEAKS = NUM_REPETITION*2
 
 def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
@@ -90,11 +90,11 @@ def get_peaks_index(data_df, selected_data, num_peaks):
 
         # Subjects were asked to repeat each exercise consecutively 5 times
         # Find 5 local min for y-coordinates (local min == hand rise above head)
-        left_most = df.loc[[df.loc[df['norm'] > 10, 'x_sum'].idxmin()]].index.values.tolist()
-        right_most = df.loc[[df.loc[df['norm'] > 10, 'x_sum'].idxmax()]].index.values.tolist()
+        left_most = df['shoulders_x_sum'].idxmin()
+        right_most = df['shoulders_x_sum'].idxmax()
 
-        peaks_index.extend(left_most)
-        peaks_index.extend(right_most)
+        peaks_index.append(left_most)
+        peaks_index.append(right_most)
 
 
     # Should be a left peak and right peak
@@ -222,8 +222,19 @@ def compute_features(timestamps, data, score):
 
         # Compute angle between shoulder-shoulder and hand-hand
         shoulders_hands_angle = angle_between(vec_47, vec25)
+
+        # Compute angle between arm and torso
+        vec_18 = pt_8 - pt_1
+        vec_14 = pt_4 - pt_1
+        vec_17 = pt_7 - pt_1
+
+        left_arm_torso_angle = angle_between(vec_14, vec_18)
+        right_arm_torso_angle = angle_between(vec_17, vec_18)
+
+        # Append all features to curr_features
         curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torso_tilted_angle,
-                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff])
+                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff, left_arm_torso_angle,
+                                    right_arm_torso_angle])
         assert curr_features.size == len(CURR_FEATURES)
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
@@ -247,8 +258,6 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         # isValid = 'E_ID12' in filepath or 'P_ID11' in filepath
         # if not isValid: continue
 
-        data = np.loadtxt(filepath, delimiter=',')
-
         video_name = os.path.basename(filepath).split('.')[0]
         subject_id = '_'.join(video_name.split('_')[2:4])
         print(subject_id)
@@ -270,8 +279,19 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         sum_left_right = left_hand_x + right_hand_x
         diff_left_right = abs(left_hand_y - right_hand_y)
 
+        # Compute shoulder
+        # left shoulder : point 2
+        left_shoulder_x = data[:, 2 * 2]
+        left_shoulder_y = data[:, 2 * 2 + 1]
+
+        # right shoulder : point 5
+        right_shoulder_x = data[:, 5 * 2]
+        right_shoulder_y = data[:, 5 * 2 + 1]
+
+        sum_shoulders =left_shoulder_x + right_shoulder_x
+
         d = { 'left_x': left_hand_x, 'left_y': left_hand_y, 'right_x': right_hand_x, 'right_y': right_hand_y,
-              'x_sum': sum_left_right, 'y_diff': diff_left_right}
+              'x_sum': sum_left_right, 'y_diff': diff_left_right, 'shoulders_x_sum': sum_shoulders}
 
         data_df = pd.DataFrame(data=d)
 
@@ -334,10 +354,10 @@ def plot_heatmap(df, corr_type, output_folder):
     plt.close()
 
 def get_features():
-    should_draw_plots = False
-    should_write_features = False
+    should_draw_plots = True
+    should_write_features = True
 
-    output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features_test2')
+    output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features_shoulders')
     try:
         os.mkdir(output_folder)
     except OSError:

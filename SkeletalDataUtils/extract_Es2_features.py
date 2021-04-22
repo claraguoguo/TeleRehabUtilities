@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import seaborn as sns
+import math
 # Turn interactive plotting off
 plt.ioff()
 
@@ -15,7 +16,8 @@ EXERCISE_TYPE = f'Es{EXERCISE_INDEX}'
 FILE_PATH = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints'
 OUTPUT_ROOT = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}'
 
-CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle', 'left_shoulder_angle', 'right_shoulder_angle']
+CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle',
+                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff']
 NUM_PEAKS = NUM_REPETITION*2
 
 def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
@@ -70,7 +72,7 @@ def plot_body_joints(data, peaks_index, features, video_name, feature_plots_outp
     plt.savefig(os.path.join(feature_plots_output, video_name + '.png'))
     plt.close()
 
-def get_peaks_index(data, num_peaks):
+def get_peaks_index(data_df, selected_data, num_peaks):
 
     '''
     From testing, if there is less than 64 frames, then split data into 5 sections won't work well.
@@ -79,18 +81,21 @@ def get_peaks_index(data, num_peaks):
     '''
 
     # split into data into num_peaks number of sections and find 1 peak in each section
-    split_data = np.array_split(data, num_peaks)
+    # split_data = np.array_split(selected_data, num_peaks)
+    split_data = np.array_split(data_df, num_peaks)
 
     index_count = 0
     peaks_index = []
-    for array in split_data:
-        left_most = np.argmin(array)
-        right_most = np.argmax(array)
+    for df in split_data:
 
-        peaks_index.append(left_most + index_count)
-        peaks_index.append(right_most + index_count)
+        # Subjects were asked to repeat each exercise consecutively 5 times
+        # Find 5 local min for y-coordinates (local min == hand rise above head)
+        left_most = df.loc[[df.loc[df['norm'] > 10, 'x_sum'].idxmin()]].index.values.tolist()
+        right_most = df.loc[[df.loc[df['norm'] > 10, 'x_sum'].idxmax()]].index.values.tolist()
 
-        index_count += len(array)
+        peaks_index.extend(left_most)
+        peaks_index.extend(right_most)
+
 
     # Should be a left peak and right peak
     return peaks_index
@@ -184,8 +189,6 @@ def compute_features(timestamps, data, score):
         right_shoulder_angle = angle_between(vec51, vec56)
 
 
-
-
         # Compute the distance between left hand and right hand (pt7 and pt4)
         vec_47 = pt_7 - pt_4
         hand_distance = np.linalg.norm(vec_47)
@@ -216,14 +219,21 @@ def compute_features(timestamps, data, score):
 
         # Compute the difference of elbow angles
         elbow_angles_diff = abs(left_elbow_angle - right_elbow_angle)
+
+        # Compute angle between shoulder-shoulder and hand-hand
+        shoulders_hands_angle = angle_between(vec_47, vec25)
         curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torso_tilted_angle,
-                                    left_shoulder_angle, right_shoulder_angle])
+                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff])
         assert curr_features.size == len(CURR_FEATURES)
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
             print_string += ' {0}:{1:.1f}'.format(feat, curr_features[i])
         print_string += ' score:{:.2f}'.format(score)
         print(print_string)
+
+        print(shoulders_hands_angle)
+        if shoulders_hands_angle > 100:
+            print(1)
 
         features = np.vstack((features, curr_features))
 
@@ -232,6 +242,11 @@ def compute_features(timestamps, data, score):
 def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_output, feature_plots_output):
     for filepath in glob.glob(FILE_PATH + '/*.txt', recursive=True):
         # video has shape [frames x num_joints]
+        data = np.loadtxt(filepath, delimiter=',')
+
+        # isValid = 'E_ID12' in filepath or 'P_ID11' in filepath
+        # if not isValid: continue
+
         data = np.loadtxt(filepath, delimiter=',')
 
         video_name = os.path.basename(filepath).split('.')[0]
@@ -255,7 +270,16 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         sum_left_right = left_hand_x + right_hand_x
         diff_left_right = abs(left_hand_y - right_hand_y)
 
-        peaks_index = get_peaks_index(sum_left_right, NUM_REPETITION)  # Find 5 peaks, each has LEFT & RIGHT peak
+        d = { 'left_x': left_hand_x, 'left_y': left_hand_y, 'right_x': right_hand_x, 'right_y': right_hand_y,
+              'x_sum': sum_left_right, 'y_diff': diff_left_right}
+
+        data_df = pd.DataFrame(data=d)
+
+        data_df['norm'] = pow( (pow(data_df['left_x'] - data_df['right_x'], 2) +
+                                pow(data_df['left_y'] - data_df['right_y'], 2))
+                               , 0.5)
+
+        peaks_index = get_peaks_index(data_df, sum_left_right, NUM_REPETITION)  # Find 5 peaks, each has LEFT & RIGHT peak
 
         # Features = [num_peaks x num_features]
         score = df.loc[subject_id]['score']
@@ -302,7 +326,7 @@ def plot_heatmap(df, corr_type, output_folder):
     # Using Pearson Correlation
     plt.figure(figsize=(11, 11))
     cor = df.corr(method=corr_type)
-    sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+    sns.heatmap(cor, annot=True, cmap='coolwarm')
     plt.title(f"{corr_type} correlation matrix", fontsize=20)
     plt.xticks(rotation=45)
     plt.yticks(rotation=45)
@@ -310,8 +334,8 @@ def plot_heatmap(df, corr_type, output_folder):
     plt.close()
 
 def get_features():
-    should_draw_plots = True
-    should_write_features = True
+    should_draw_plots = False
+    should_write_features = False
 
     output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features')
     try:
