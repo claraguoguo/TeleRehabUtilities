@@ -4,15 +4,15 @@ import numpy as np
 import os
 import json
 
-EXERCISE_TYPE = 'Es2'
+EXERCISE_TYPE = 'Es5'
 FILE_ROOT = f"/Users/Clara_1/Google Drive/KiMoRe_skeletal_{EXERCISE_TYPE}/"
-OUTPUT_FOLDER = f"/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints/"
+OUTPUT_FOLDER = f"/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints_2/"
 UPPER_BODY_INDEX = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 12])
 LOWER_BODY_INDEX = np.array([10, 11, 13, 14, 19, 20, 21, 22, 23, 24])
 LEG_INDEX = np.array([10, 13])
 
-# VALID_JOINTS_INDEX = np.append(UPPER_BODY_INDEX)
-VALID_JOINTS_INDEX = UPPER_BODY_INDEX
+VALID_JOINTS_INDEX = np.append(UPPER_BODY_INDEX, LEG_INDEX)
+# VALID_JOINTS_INDEX = UPPER_BODY_INDEX
 
 TOTAL_BODY_JOINTS = 25
 
@@ -61,7 +61,7 @@ def process_JSON():
         os.mkdir(OUTPUT_FOLDER)
     except OSError:
         print("Creation of the directory %s failed!" % OUTPUT_FOLDER)
-        raise
+        # raise
     for rootdir, dirs, files in os.walk(FILE_ROOT):
         for subdir in dirs:
             video_path = os.path.join(rootdir, subdir)

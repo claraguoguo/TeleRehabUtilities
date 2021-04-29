@@ -10,21 +10,22 @@ plt.ioff()
 
 CURR_FEATURES = ['']
 NUM_REPETITION = 5
-EXERCISE_INDEX = 3
+EXERCISE_INDEX = 4
 EXERCISE_TYPE = f'Es{EXERCISE_INDEX}'
 
 FILE_PATH = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints'
 OUTPUT_ROOT = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}'
 
-CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle',
-                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff', 'left_arm_torso_angle', 'right_arm_torso_angle']
-NUM_PEAKS = NUM_REPETITION*3
+# CURR_FEATURES = ['torso_tilted_angle', 'left_knee_angle', 'right_knee_angle']
+CURR_FEATURES = ['torso_tilted_angle', 'knee_dist_ratio', 'shoulder_level_angle']
+
+NUM_PEAKS = NUM_REPETITION*2
 
 def plot_body_joints(data, peaks_index, features, video_name, feature_plots_output):
-    fig = plt.figure(figsize=(25, 15))
+    fig = plt.figure(figsize=(15, 15))
 
     for index, counter in zip(peaks_index, range(NUM_PEAKS)):
-        ax = fig.add_subplot(3,6, counter + 1)
+        ax = fig.add_subplot(3, 4, counter + 1)
         feature = features[counter]
         frame = data[index, :]
         xs = np.array([])
@@ -90,12 +91,11 @@ def get_peaks_index(data_df, selected_data, num_peaks):
 
         # Subjects were asked to repeat each exercise consecutively 5 times
         # Find 5 local min for y-coordinates (local min == hand rise above head)
-        left_most = df['shoulders_x_sum'].idxmin()
-        right_most = df['shoulders_x_sum'].idxmax()
-        mid_position = df['criteria'].idxmax()
+        left_most = df['x_sum'].idxmin()
+        right_most = df['x_sum'].idxmax()
+
 
         peaks_index.append(left_most)
-        peaks_index.append(mid_position)
         peaks_index.append(right_most)
 
 
@@ -139,31 +139,24 @@ def compute_features(timestamps, data, score):
     for timestamp in timestamps:
         frame = data[timestamp, :]
         ''' 
-        Left arm:
-        pt_2: left shoulder
-        pt_3: left elbow
-        pt_4: left hand
-        
+        Hip:
         pt_9: left hip
-        '''
-        pt_2 = np.array([frame[2 * 2], frame[2 * 2 + 1]])
-        pt_3 = np.array([frame[3 * 2], frame[3 * 2 + 1]])
-        pt_4 = np.array([frame[4 * 2], frame[4 * 2 + 1]])
-        pt_9 = np.array([frame[9 * 2], frame[9 * 2 + 1]])
-
-        ''' 
-        Right arm:
-        pt_5: right shoulder
-        pt_6: right elbow
-        pt_7: right hand
-        
         pt_12: right hip
+        
+        pt_10: left knee
+        pt_13: right knee
+        
+        pt_2: left shoulder
+        pt_5: right shoulder
         '''
-        pt_5 = np.array([frame[5 * 2], frame[5 * 2 + 1]])
-        pt_6 = np.array([frame[6 * 2], frame[6 * 2 + 1]])
-        pt_7 = np.array([frame[7 * 2], frame[7 * 2 + 1]])
+        pt_9 = np.array([frame[9 * 2], frame[9 * 2 + 1]])
         pt_12 = np.array([frame[12 * 2], frame[12 * 2 + 1]])
 
+        pt_10 = np.array([frame[10 * 2], frame[10 * 2 + 1]])
+        pt_13 = np.array([frame[13 * 2], frame[13 * 2 + 1]])
+
+        pt_2 = np.array([frame[2 * 2], frame[2 * 2 + 1]])
+        pt_5 = np.array([frame[5 * 2], frame[5 * 2 + 1]])
         '''
         Torso:
         pt_1: neck
@@ -172,71 +165,67 @@ def compute_features(timestamps, data, score):
         pt_1 = np.array([frame[1 * 2], frame[1 * 2 + 1]])
         pt_8 = np.array([frame[8 * 2], frame[8 * 2 + 1]])
 
-        # vec_32: vector from pt_3 to pt_2
-        vec_32 = pt_2 - pt_3
-        vec_34 = pt_4 - pt_3
-        left_elbow_angle = angle_between(vec_32, vec_34)
+        # # vec_32: vector from pt_3 to pt_2
+        # vec_10_9 = pt_9 - pt_10
+        # vec_10_11 = pt_4 - pt_3
+        # left_elbow_angle = angle_between(vec_32, vec_34)
+        #
+        # vec_65 = pt_5 - pt_6
+        # vec_67 = pt_7 - pt_6
+        # right_elbow_angle = angle_between(vec_65, vec_67)
+        #
+        # # Compute shoulder angles
+        # vec21 = pt_1 - pt_2
+        # vec23 = pt_3 - pt_2
+        # left_shoulder_angle = angle_between(vec21, vec23)
+        #
+        # vec51 = pt_1 - pt_5
+        # vec56 = pt_6 - pt_5
+        # right_shoulder_angle = angle_between(vec51, vec56)
+        #
+        #
+        # Compute the distance between left hip and right hip (pt9 and pt12)
+        vec_9_12 = pt_9 - pt_12
+        hip_distance = np.linalg.norm(vec_9_12)
 
-        vec_65 = pt_5 - pt_6
-        vec_67 = pt_7 - pt_6
-        right_elbow_angle = angle_between(vec_65, vec_67)
-
-        # Compute shoulder angles
-        vec21 = pt_1 - pt_2
-        vec23 = pt_3 - pt_2
-        left_shoulder_angle = angle_between(vec21, vec23)
-
-        vec51 = pt_1 - pt_5
-        vec56 = pt_6 - pt_5
-        right_shoulder_angle = angle_between(vec51, vec56)
-
-
-        # Compute the distance between left hand and right hand (pt7 and pt4)
-        vec_47 = pt_7 - pt_4
-        hand_distance = np.linalg.norm(vec_47)
-
-        # Compute the shoulder distance between pt5 and pt2
-        vec25 = pt_5 - pt_2
-        shoulder_distance = np.linalg.norm(vec25)
-        hand_shoulder_ratio = hand_distance/shoulder_distance
-
-        # Compute midterm between hands
-        hands_midpoint = (pt_4 + pt_7)/2
+        # Compute the knee distance between pt10 and pt13
+        vec_10_13 = pt_10 - pt_13
+        knee_distance = np.linalg.norm(vec_10_13)
+        knee_dist_ratio = hip_distance/knee_distance
 
         # Vertical vector between pt_1 and pt_8
         vec_81 = pt_1 - pt_8
-        vec_8_hand_mid = hands_midpoint - pt_8
 
         # Compute vertical vector that goes through pt_8
         vec_8_vertical = np.array([pt_8[0], pt_1[1]]) - pt_8
         torso_tilted_angle = angle_between(vec_81, vec_8_vertical)
 
-        # Compute the tilted angle between two hands
-        horizontal_vec = np.array([pt_7[0], pt_4[1]]) - pt_4
-        hand_tilted_angle = angle_between(horizontal_vec, vec_47)
-
-        # Compute the torso area which the area enclosed by body points: 2, 5, 9, 12
-        torso = np.array([pt_2, pt_5, pt_12, pt_9])
-        torso_area = compute_poly_area(torso[:, 0], torso[:, 1])
-
-        # Compute the difference of elbow angles
-        elbow_angles_diff = abs(left_elbow_angle - right_elbow_angle)
-
-        # Compute angle between shoulder-shoulder and hand-hand
-        shoulders_hands_angle = angle_between(vec_47, vec25)
-
-        # Compute angle between arm and torso
-        vec_18 = pt_8 - pt_1
-        vec_14 = pt_4 - pt_1
-        vec_17 = pt_7 - pt_1
-
-        left_arm_torso_angle = angle_between(vec_14, vec_18)
-        right_arm_torso_angle = angle_between(vec_17, vec_18)
+        # Compute the tilted angle between two shoulders
+        vec_25 = pt_5 - pt_2
+        vec_2_horizontal = np.array([pt_5[0], pt_2[1]]) - pt_2
+        shoulder_level_angle = angle_between(vec_25, vec_2_horizontal)
+        #
+        # # Compute the torso area which the area enclosed by body points: 2, 5, 9, 12
+        # torso = np.array([pt_2, pt_5, pt_12, pt_9])
+        # torso_area = compute_poly_area(torso[:, 0], torso[:, 1])
+        #
+        # # Compute the difference of elbow angles
+        # elbow_angles_diff = abs(left_elbow_angle - right_elbow_angle)
+        #
+        # # Compute angle between shoulder-shoulder and hand-hand
+        # shoulders_hands_angle = angle_between(vec_47, vec25)
+        #
+        # # Compute angle between arm and torso
+        # vec_18 = pt_8 - pt_1
+        # vec_14 = pt_4 - pt_1
+        # vec_17 = pt_7 - pt_1
+        #
+        # left_arm_torso_angle = angle_between(vec_14, vec_18)
+        # right_arm_torso_angle = angle_between(vec_17, vec_18)
 
         # Append all features to curr_features
-        curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torso_tilted_angle,
-                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff, left_arm_torso_angle,
-                                    right_arm_torso_angle])
+        curr_features = np.asarray([torso_tilted_angle, knee_dist_ratio, shoulder_level_angle])
+
         assert curr_features.size == len(CURR_FEATURES)
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
@@ -244,12 +233,13 @@ def compute_features(timestamps, data, score):
         print_string += ' score:{:.2f}'.format(score)
         print(print_string)
 
-        print(shoulders_hands_angle)
-        if shoulders_hands_angle > 100:
-            print(1)
 
         features = np.vstack((features, curr_features))
 
+    # add 1 additional row [max(torso_tilted_angle)-min(torso_tilted_angle), mean(torso_tilted_angle)]
+    # additional_feat = [max(features[:,0]) - min(features[:,0]), np.mean(features[:,0])]
+    # print('additional row: {0}:{1:.1f}  {2}:{3:.1f}'.format('min/max', additional_feat[0], 'mean:', additional_feat[1]))
+    # features = np.vstack((features, additional_feat))
     return features
 
 def compute_distance_btw_2_points(x1, y1, x2, y2):
@@ -272,53 +262,28 @@ def get_peak_features(should_draw_plots, should_write_features, df, feature_txt_
         # show the point plot
         # show_plots(data[0])
 
-        # left hand : point 4
-        left_hand_x = data[:, 4 * 2]
-        left_hand_y = data[:, 4 * 2 + 1]
+        # left hip : point 9
+        left_hip_x = data[:, 9 * 2]
+        left_hip_y = data[:, 9 * 2 + 1]
 
-        # right hand : point 7
-        right_hand_x = data[:, 7 * 2]
-        right_hand_y = data[:, 7 * 2 + 1]
+        # right hip : point 12
+        right_hip_x = data[:, 12 * 2]
+        right_hip_y = data[:, 12 * 2 + 1]
 
         # Subjects were asked to repeat each exercise consecutively 5 times
         # Find 5 local min for y-coordinates (local min == hand rise above head)
 
-        sum_left_right = left_hand_x + right_hand_x
-        diff_left_right = abs(left_hand_y - right_hand_y)
+        sum_left_right = left_hip_x + right_hip_x
 
-        # Compute shoulder
-        # left shoulder : point 2
-        left_shoulder_x = data[:, 2 * 2]
-        left_shoulder_y = data[:, 2 * 2 + 1]
-
-        # right shoulder : point 5
-        right_shoulder_x = data[:, 5 * 2]
-        right_shoulder_y = data[:, 5 * 2 + 1]
-
-        sum_shoulders =left_shoulder_x + right_shoulder_x
-
-        d = { 'left_x': left_hand_x, 'left_y': left_hand_y, 'right_x': right_hand_x, 'right_y': right_hand_y,
-              'x_sum': sum_left_right, 'y_diff': diff_left_right, 'shoulders_x_sum': sum_shoulders + sum_left_right}
+        d = { 'x_sum': sum_left_right }
 
         data_df = pd.DataFrame(data=d)
 
-        data_df['norm'] = compute_distance_btw_2_points(left_hand_x, left_hand_y,
-                                                        right_hand_x, right_hand_y)
-
-        left_arm_len = compute_distance_btw_2_points(left_hand_x, left_hand_y,
-                                                     left_shoulder_x, left_shoulder_y)
-        right_arm_len = compute_distance_btw_2_points(right_hand_x, right_hand_y,
-                                                     right_shoulder_x, right_shoulder_y)
-
-        arm_lens_diff = abs(left_arm_len - right_arm_len)
-
-        penalty_term = 30
-        data_df['criteria'] = data_df['norm'] - penalty_term * data_df['y_diff'] - penalty_term*arm_lens_diff
 
         peaks_index = get_peaks_index(data_df, sum_left_right, NUM_REPETITION)  # Find 5 peaks, each has LEFT & RIGHT peak
 
         # Features = [num_peaks x num_features]
-        score = df.loc[subject_id]['score']
+        score = df.loc[subject_id]['TS']
         print(subject_id)
         features = compute_features(peaks_index, data, score)
 
@@ -370,10 +335,10 @@ def plot_heatmap(df, corr_type, output_folder):
     plt.close()
 
 def get_features():
-    should_draw_plots = False
-    should_write_features = False
+    should_draw_plots = True
+    should_write_features = True
 
-    output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features_3_peaks')
+    output_folder = os.path.join(OUTPUT_ROOT, f'KiMoRe_skeletal_{len(CURR_FEATURES)}_features')
     try:
         os.mkdir(output_folder)
     except OSError:
@@ -388,9 +353,11 @@ def get_features():
     all_score_df = pd.read_pickle(f'{EXERCISE_TYPE}_RGB_df')
 
     ex_df = pd.DataFrame()
-    ex_df['score'] = all_score_df[f'clinical TS Ex#{EXERCISE_INDEX}']
+    ex_df['TS'] = all_score_df[f'clinical TS Ex#{EXERCISE_INDEX}']
+    # ex_df['PO'] = all_score_df[f'clinical PO Ex#{EXERCISE_INDEX}']
+    # ex_df['CF'] = all_score_df[f'clinical CF Ex#{EXERCISE_INDEX}']
 
-    score_df = ex_df.sort_values(by=['score'])
+    # score_df = ex_df.sort_values(by=['score'])
 
     # Add the feature columns to dataframe
     ex_df = pd.concat([ex_df, pd.DataFrame(columns=CURR_FEATURES)])
@@ -433,7 +400,7 @@ def get_features():
 
     # Plot heat map for features
     plot_heatmap(ex_df, 'pearson', output_folder)
-    plot_heatmap(ex_df, 'spearman', output_folder)
+    # plot_heatmap(ex_df, 'spearman', output_folder)
 
     # Create a txt file to record feature info
     with open(os.path.join(output_folder, 'features_info.txt'), 'w') as f:
