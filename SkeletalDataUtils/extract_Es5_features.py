@@ -14,14 +14,16 @@ NUM_REPETITION = 5
 EXERCISE_INDEX = 5
 EXERCISE_TYPE = f'Es{EXERCISE_INDEX}'
 
-FILE_PATH = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints'
+FILE_PATH = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}/KiMoRe_skeletal_txt_files_all_joints_with_feet'
 OUTPUT_ROOT = f'/Users/Clara_1/Documents/University/Year4/Thesis/Datasets/KiMoRe/{EXERCISE_TYPE}'
 
-# CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle',
-#                  'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff', 'left_knee_angle', 'right_knee_angle']
-
 CURR_FEATURES = ['left_elbow_angle', 'right_elbow_angle', 'hand_dist_ratio', 'torso_tilted_angle',
-                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff']
+                 'left_shoulder_angle', 'right_shoulder_angle', 'elbow_angles_diff',
+                 'left_knee_angle', 'right_knee_angle', 'torso_ratio', 'squat_ratio', 'knee_dist_ratio']
+
+torse_ratio_index = 9
+squat_ratio_index = 10
+
 NUM_PEAKS = NUM_REPETITION * 2
 
 
@@ -93,18 +95,9 @@ def get_peaks_index(data_df, selected_data, num_peaks):
     index_count = 0
     peaks_index = []
     for df in split_data:
-        # Subjects were asked to repeat each exercise consecutively 5 times
-        # Find 5 local min for y-coordinates (local min == hand rise above head)
 
-        # assert df['arm_lens'].min() < 60
-        # if df['arm_lens'].min() > 70:
-        #     print(1)
-
-        # squat_pos = df.loc[[df.loc[df['arm_lens'] < 70, 'hands_y_sum'].idxmin()]].index.values
-        # stand_up_pos = df.loc[[df.loc[df['arm_lens'] < 70, 'hands_y_sum'].idxmax()]].index.values
-
-        squat_pos = df['criteria_squat'].idxmin()
-        stand_up_pos = df['criteria_standup'].idxmax()
+        squat_pos = df['criteria_squat'].idxmax()
+        stand_up_pos = df['criteria_standup'].idxmin()
 
         peaks_index.append(stand_up_pos)
         peaks_index.append(squat_pos)
@@ -186,6 +179,19 @@ def compute_features(timestamps, data, score):
         pt_1 = np.array([frame[1 * 2], frame[1 * 2 + 1]])
         pt_8 = np.array([frame[8 * 2], frame[8 * 2 + 1]])
 
+        '''
+         Feet:
+         pt_10: left knee
+         pt_11: left foot
+         
+         pt_13: right knee
+         pt_14: right foot
+         '''
+        pt_10 = np.array([frame[10 * 2], frame[10 * 2 + 1]])
+        pt_11 = np.array([frame[11 * 2], frame[11 * 2 + 1]])
+        pt_13 = np.array([frame[13 * 2], frame[13 * 2 + 1]])
+        pt_14 = np.array([frame[14 * 2], frame[14 * 2 + 1]])
+
         # vec_32: vector from pt_3 to pt_2
         vec_32 = pt_2 - pt_3
         vec_34 = pt_4 - pt_3
@@ -246,13 +252,66 @@ def compute_features(timestamps, data, score):
         left_arm_torso_angle = angle_between(vec_14, vec_18)
         right_arm_torso_angle = angle_between(vec_17, vec_18)
 
-        # TODO:
-        # 'left_knee_angle', 'right_knee_angle'
+        # Compute knee angle
+        vec_10_9 = pt_9 - pt_10
+        vec_10_11 = pt_11 - pt_10
+        left_knee_angle = angle_between(vec_10_9, vec_10_11)
+
+        vec_13_12 = pt_12 - pt_13
+        vec_13_14 = pt_14 - pt_13
+        right_knee_angle = angle_between(vec_13_12, vec_13_14)
+
+        isSquat = features.shape[0] % 2 != 0
+
+        # Compute distance between pt_1 and pt_8
+        torso_distance = np.linalg.norm(vec_81)
+
+        # Compute distance from shoulder to feet
+        shoulders_midpt_y = ((pt_5 + pt_2)/2)[1]
+        feet_midpt_y = ((pt_11 + pt_14)/2)[1]
+        shoulder_foot_distance = abs(shoulders_midpt_y - feet_midpt_y)
+
+        if isSquat:
+            '''
+                Compute torso ratio
+                Note: this feature will only be computed for squat position, 0 will be assigned for stand-up position
+                squad postures --> odd index
+            '''
+            # Get torso_distance from stand-up posture of current repetition
+            standup_torso_distance = features[-1][torse_ratio_index]
+            # Set torso_ratio for squat position
+            torso_ratio = torso_distance/standup_torso_distance
+            # Set torso_ratio = 0 for standup position
+            features[-1][torse_ratio_index] = 0
+
+            '''
+               Compute squat ratio
+               Note: this feature will only be computed for squat position, 0 will be assigned for stand-up position
+               squad postures --> odd index
+            '''
+            # Get standup_shoulder_foot_distance from stand-up posture of current repetition
+            standup_shoulder_foot_distance = features[-1][squat_ratio_index]
+            # Set squat_ratio for squat position
+            squat_ratio = shoulder_foot_distance / standup_shoulder_foot_distance
+            # Set squat_ratio = 0 for standup position
+            features[-1][squat_ratio_index] = 0
+
+        else:
+            torso_ratio = torso_distance
+            squat_ratio = shoulder_foot_distance
+
+        # Compute knee_dist_ratio
+        vec_10_13 = pt_10 - pt_13
+        knee_distance = np.linalg.norm(vec_10_13)
+        vec_11_14 = pt_11 - pt_14
+        feet_distance = np.linalg.norm(vec_11_14)
+
+        knee_dist_ratio = knee_distance/feet_distance
 
         # Append all features to curr_features
         curr_features = np.asarray([left_elbow_angle, right_elbow_angle, hand_shoulder_ratio, torso_tilted_angle,
-                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff
-                                    ])
+                                    left_shoulder_angle, right_shoulder_angle, elbow_angles_diff, left_knee_angle,
+                                    right_knee_angle, torso_ratio, squat_ratio, knee_dist_ratio])
         assert curr_features.size == len(CURR_FEATURES)
         print_string = f'timestamp: {timestamp}'
         for i, feat in enumerate(CURR_FEATURES):
@@ -454,6 +513,9 @@ def get_features():
 
     # Convert all elements to float
     ex_df = ex_df.astype(float)
+
+    # Remove rows with N/A (i.e invalid videos that do not have lower body part)
+    ex_df = ex_df.dropna()
 
     # Save the feature df
     ex_df.to_csv(os.path.join(output_folder, f'Ex{EXERCISE_INDEX}_skeletal_features.csv'))
